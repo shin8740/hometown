@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>고향</title>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+    background: url("gpttest.png") no-repeat center center fixed;
+    background-size: cover;
+}
+
+.stage {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+}
+
+.video-panel {
+    position: absolute;
+    top: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 700px;
+    aspect-ratio: 16 / 9;
+    z-index: 1;
+}
+.video-panel iframe {
+    width: 100%;
+    height: 100%;
+}
+
+.character {
+    position: absolute;
+    text-align: center;
+    cursor: pointer;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.info-box {
+    background: white;
+    padding: 4px 8px;
+    border: 1px solid #333;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.bubble {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 8px 12px;
+    border: 1px solid black;
+    border-radius: 4px;
+    white-space: nowrap;
+    display: none;
+    margin-bottom: 5px;
+    background: white;
+    opacity: 0.85;
+}
+
+.video-input {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    gap: 5px;
+    z-index: 20;
+}
+
+.chatbox {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+    z-index: 20;
+}
+.chatbox input {
+    width: 360px;
+    height: 44px;
+    font-size: 16px;
+}
+.chatbox button {
+    width: 100px;
+    height: 44px;
+    font-size: 15px;
+}
+
+/* ✅ 요청 반영: 더 투명 + 네모 */
+.chat-log {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 520px;
+    height: 200px;
+    background: rgba(255,255,255,0.6);
+    border-radius: 0;
+    padding: 10px;
+    overflow-y: auto;
+    font-size: 14px;
+    display: none;
+    z-index: 20;
+}
+</style>
+</head>
+
+<body>
+
+<div class="video-input">
+    <input id="videoLink" placeholder="유튜브 링크">
+    <button onclick="changeVideo()">재생</button>
+</div>
+
+<div class="stage">
+
+    <div class="video-panel">
+        <iframe id="yt"
+        src="https://www.youtube.com/embed/jfKfPfyJRdk?autoplay=1&mute=1"
+        frameborder="0"
+        allow="autoplay"></iframe>
+    </div>
+
+    <div class="character" id="charA" style="left:150px; top:120px;">
+        <img src="wnajrqkqznddi.jpg" width="180">
+        <div class="info-box" id="infoA">over | 0분 0초 (OFF)</div>
+        <button onclick="toggleTimer('A')">시간 측정 (click)</button>
+        <div class="bubble" id="bubbleA"></div>
+    </div>
+
+    <div class="character" id="charB" style="left:500px; top:120px;">
+        <img src="dhksrPznddi.jpg" width="140">
+        <div class="info-box" id="infoB">Lilreaders | 0분 0초 (OFF)</div>
+        <button onclick="toggleTimer('B')">시간 측정 (click)</button>
+        <div class="bubble" id="bubbleB"></div>
+    </div>
+
+</div>
+
+<div class="chat-log" id="chatLog"></div>
+
+<div class="chatbox">
+    <input id="chatInput" placeholder="채팅 입력">
+    <button onclick="sendChat()">보내기</button>
+    <button onclick="toggleLog()">채팅로그</button>
+</div>
+
+<script>
+function extractVideoId(url) {
+    const patterns = [/v=([^&]+)/,/youtu\.be\/([^?]+)/,/embed\/([^?]+)/];
+    for (let p of patterns) {
+        const m = url.match(p);
+        if (m) return m[1];
+    }
+    return null;
+}
+function changeVideo() {
+    const id = extractVideoId(videoLink.value.trim());
+    if (!id) { alert("유효하지 않은 링크에요!"); return; }
+    yt.src = `https://www.youtube.com/embed/${id}?autoplay=1&mute=1`;
+}
+
+let selected = null;
+charA.onclick = () => { if (!selected) selected = "A"; };
+charB.onclick = () => { if (!selected) selected = "B"; };
+
+document.addEventListener("keydown", e => {
+    if (e.key === "/") {
+        e.preventDefault();
+        chatInput.focus();
+    }
+});
+
+chatInput.addEventListener("keydown", e => {
+    if (e.key === "Enter") sendChat();
+});
+
+const MAX_LOG = 50;
+function sendChat() {
+    if (!selected) { alert("캐릭터를 먼저 선택하세요!"); return; }
+    const msg = chatInput.value.trim();
+    if (!msg) return;
+
+    showBubble(selected, msg);
+
+    const line = document.createElement("div");
+    const time = new Date().toLocaleTimeString();
+
+    /* ✅ 요청 반영: 캐릭터 이름 표시 */
+    line.innerHTML =
+        `<b>[${selected === "A" ? "over" : "Lilreaders"}]</b> ${msg}
+         <span style="color:gray;font-size:12px;">${time}</span>`;
+
+    chatLog.appendChild(line);
+
+    while (chatLog.children.length > MAX_LOG)
+        chatLog.removeChild(chatLog.firstChild);
+
+    chatLog.scrollTop = chatLog.scrollHeight;
+    chatInput.value = "";
+}
+
+function showBubble(id, msg) {
+    const bubble = document.getElementById("bubble" + id);
+    bubble.innerText = msg;
+    bubble.style.display = "block";
+    setTimeout(() => bubble.style.display = "none", 4000);
+}
+
+function toggleLog() {
+    chatLog.style.display =
+        chatLog.style.display === "none" ? "block" : "none";
+}
+
+const keys = {};
+const speed = 3;
+document.addEventListener("keydown", e => keys[e.key] = true);
+document.addEventListener("keyup", e => keys[e.key] = false);
+
+function moveLoop() {
+    if (selected) {
+        const c = document.getElementById("char" + selected);
+        let x = c.offsetLeft;
+        let y = c.offsetTop;
+
+        if (keys.ArrowLeft) x -= speed;
+        if (keys.ArrowRight) x += speed;
+        if (keys.ArrowUp) y -= speed;
+        if (keys.ArrowDown) y += speed;
+
+        const stage = document.querySelector(".stage");
+        x = Math.max(0, Math.min(stage.offsetWidth - c.offsetWidth, x));
+        y = Math.max(0, Math.min(stage.offsetHeight - c.offsetHeight, y));
+
+        c.style.left = x + "px";
+        c.style.top = y + "px";
+    }
+    requestAnimationFrame(moveLoop);
+}
+moveLoop();
+
+let timers = {
+    A: { time: Number(localStorage.timeA || 0), running: false },
+    B: { time: Number(localStorage.timeB || 0), running: false }
+};
+
+setInterval(() => {
+    ["A","B"].forEach(id => {
+        if (timers[id].running) timers[id].time++;
+        localStorage["time"+id] = timers[id].time;
+
+        const m = Math.floor(timers[id].time / 60);
+        const s = timers[id].time % 60;
+        const name = id === "A" ? "over" : "Lilreaders";
+        document.getElementById("info"+id).innerText =
+            `${name} | ${m}분 ${s}초 (${timers[id].running ? "ON" : "OFF"})`;
+    });
+}, 1000);
+
+function toggleTimer(id) {
+    timers[id].running = !timers[id].running;
+}
+</script>
+
+</body>
+</html>
