@@ -119,7 +119,7 @@ body {
 
 <div class="video-input">
     <input id="videoLink" placeholder="유튜브 링크">
-    <button onclick="changeVideo()">재생</button>
+    <button id="videoBtn">재생</button>
 </div>
 
 <div class="stage">
@@ -134,14 +134,14 @@ body {
     <div class="character" id="charA" style="left:150px; top:120px;">
         <img src="wnajrqkqznddi.jpg" width="180">
         <div class="info-box" id="infoA">over | 0분 0초 (OFF)</div>
-        <button onclick="toggleTimer('A')">시간 측정 (click)</button>
+        <button id="timerA">시간 측정 (click)</button>
         <div class="bubble" id="bubbleA"></div>
     </div>
 
     <div class="character" id="charB" style="left:500px; top:120px;">
         <img src="dhksrPznddi.jpg" width="140">
         <div class="info-box" id="infoB">Lilreaders | 0분 0초 (OFF)</div>
-        <button onclick="toggleTimer('B')">시간 측정 (click)</button>
+        <button id="timerB">시간 측정 (click)</button>
         <div class="bubble" id="bubbleB"></div>
     </div>
 
@@ -151,8 +151,8 @@ body {
 
 <div class="chatbox">
     <input id="chatInput" placeholder="채팅 입력">
-    <button onclick="sendChat()">보내기</button>
-    <button onclick="toggleLog()">채팅로그</button>
+    <button id="sendBtn">보내기</button>
+    <button id="logBtn">채팅로그</button>
 </div>
 
 <script type="module">
@@ -160,7 +160,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebas
 import { getFirestore, doc, setDoc, onSnapshot, addDoc, collection, serverTimestamp, query, orderBy } 
 from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
-/* 🔧 Firebase 설정 (사용자 제공 값) */
+/* Firebase 설정 */
 const firebaseConfig = {
   apiKey: "AIzaSyChjU0-QXRJptCvP9zYMaf-wDd4-kWkCAM",
   authDomain: "hometown-47a5f.firebaseapp.com",
@@ -172,6 +172,8 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+
+/* ---------- 기존 로직 유지 ---------- */
 
 function extractVideoId(url) {
     const patterns = [/v=([^&]+)/,/youtu\.be\/([^?]+)/,/embed\/([^?]+)/];
@@ -308,6 +310,13 @@ setInterval(() => {
 function toggleTimer(id) {
     timers[id].running = !timers[id].running;
 }
+
+/* ---------- 이벤트 바인딩 (모듈 대응 핵심 수정) ---------- */
+videoBtn.onclick = changeVideo;
+sendBtn.onclick = sendChat;
+logBtn.onclick = toggleLog;
+timerA.onclick = () => toggleTimer("A");
+timerB.onclick = () => toggleTimer("B");
 </script>
 
 </body>
