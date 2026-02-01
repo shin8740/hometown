@@ -97,7 +97,6 @@ body {
     font-size: 15px;
 }
 
-/* ✅ 요청 반영: 더 투명 + 네모 */
 .chat-log {
     position: fixed;
     bottom: 80px;
@@ -156,7 +155,24 @@ body {
     <button onclick="toggleLog()">채팅로그</button>
 </div>
 
-<script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+import { getFirestore, doc, setDoc, onSnapshot, addDoc, collection, serverTimestamp, query, orderBy } 
+from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+
+/* 🔧 Firebase 설정 (사용자 제공 값) */
+const firebaseConfig = {
+  apiKey: "AIzaSyChjU0-QXRJptCvP9zYMaf-wDd4-kWkCAM",
+  authDomain: "hometown-47a5f.firebaseapp.com",
+  projectId: "hometown-47a5f",
+  storageBucket: "hometown-47a5f.firebasestorage.app",
+  messagingSenderId: "599624185810",
+  appId: "1:599624185810:web:e99ce371c3e47591357a0b"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
 function extractVideoId(url) {
     const patterns = [/v=([^&]+)/,/youtu\.be\/([^?]+)/,/embed\/([^?]+)/];
     for (let p of patterns) {
@@ -165,11 +181,23 @@ function extractVideoId(url) {
     }
     return null;
 }
-function changeVideo() {
+
+/* 🔁 유튜브 공유 */
+async function changeVideo() {
     const id = extractVideoId(videoLink.value.trim());
     if (!id) { alert("유효하지 않은 링크에요!"); return; }
-    yt.src = `https://www.youtube.com/embed/${id}?autoplay=1&mute=1`;
+
+    await setDoc(doc(db, "room", "video"), {
+        videoId: id,
+        updatedAt: serverTimestamp()
+    });
 }
+
+onSnapshot(doc(db, "room", "video"), (snap) => {
+    if (!snap.exists()) return;
+    const { videoId } = snap.data();
+    yt.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1`;
+});
 
 let selected = null;
 charA.onclick = () => { if (!selected) selected = "A"; };
@@ -187,29 +215,38 @@ chatInput.addEventListener("keydown", e => {
 });
 
 const MAX_LOG = 50;
-function sendChat() {
+
+/* 🔁 채팅 전송 */
+async function sendChat() {
     if (!selected) { alert("캐릭터를 먼저 선택하세요!"); return; }
     const msg = chatInput.value.trim();
     if (!msg) return;
 
-    showBubble(selected, msg);
+    await addDoc(collection(db, "room", "chat", "messages"), {
+        sender: selected === "A" ? "over" : "Lilreaders",
+        char: selected,
+        text: msg,
+        time: serverTimestamp()
+    });
 
-    const line = document.createElement("div");
-    const time = new Date().toLocaleTimeString();
-
-    /* ✅ 요청 반영: 캐릭터 이름 표시 */
-    line.innerHTML =
-        `<b>[${selected === "A" ? "over" : "Lilreaders"}]</b> ${msg}
-         <span style="color:gray;font-size:12px;">${time}</span>`;
-
-    chatLog.appendChild(line);
-
-    while (chatLog.children.length > MAX_LOG)
-        chatLog.removeChild(chatLog.firstChild);
-
-    chatLog.scrollTop = chatLog.scrollHeight;
     chatInput.value = "";
 }
+
+/* 🔁 채팅 수신 */
+const chatQuery = query(collection(db, "room", "chat", "messages"), orderBy("time"));
+onSnapshot(chatQuery, (snapshot) => {
+    chatLog.innerHTML = "";
+    snapshot.docs.slice(-MAX_LOG).forEach(doc => {
+        const data = doc.data();
+        const line = document.createElement("div");
+        const time = data.time?.toDate().toLocaleTimeString() || "";
+        line.innerHTML = `<b>[${data.sender}]</b> ${data.text}
+            <span style="color:gray;font-size:12px;">${time}</span>`;
+        chatLog.appendChild(line);
+        showBubble(data.char, data.text);
+    });
+    chatLog.scrollTop = chatLog.scrollHeight;
+});
 
 function showBubble(id, msg) {
     const bubble = document.getElementById("bubble" + id);
