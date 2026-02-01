@@ -119,7 +119,7 @@ body {
 
 <div class="video-input">
     <input id="videoLink" placeholder="유튜브 링크">
-    <button id="videoBtn">재생</button>
+    <button onclick="changeVideo()">재생</button>
 </div>
 
 <div class="stage">
@@ -134,14 +134,14 @@ body {
     <div class="character" id="charA" style="left:150px; top:120px;">
         <img src="wnajrqkqznddi.jpg" width="180">
         <div class="info-box" id="infoA">over | 0분 0초 (OFF)</div>
-        <button id="timerA">시간 측정 (click)</button>
+        <button onclick="toggleTimer('A')">시간 측정 (click)</button>
         <div class="bubble" id="bubbleA"></div>
     </div>
 
     <div class="character" id="charB" style="left:500px; top:120px;">
         <img src="dhksrPznddi.jpg" width="140">
         <div class="info-box" id="infoB">Lilreaders | 0분 0초 (OFF)</div>
-        <button id="timerB">시간 측정 (click)</button>
+        <button onclick="toggleTimer('B')">시간 측정 (click)</button>
         <div class="bubble" id="bubbleB"></div>
     </div>
 
@@ -151,29 +151,29 @@ body {
 
 <div class="chatbox">
     <input id="chatInput" placeholder="채팅 입력">
-    <button id="sendBtn">보내기</button>
-    <button id="logBtn">채팅로그</button>
+    <button onclick="sendChat()">보내기</button>
+    <button onclick="toggleLog()">채팅로그</button>
 </div>
 
 <script type="module">
+/* 🔥 Firebase 설정 */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
-import { getFirestore, doc, setDoc, onSnapshot, addDoc, collection, serverTimestamp, query, orderBy } 
-from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
-/* Firebase 설정 */
 const firebaseConfig = {
   apiKey: "AIzaSyChjU0-QXRJptCvP9zYMaf-wDd4-kWkCAM",
   authDomain: "hometown-47a5f.firebaseapp.com",
   projectId: "hometown-47a5f",
   storageBucket: "hometown-47a5f.firebasestorage.app",
   messagingSenderId: "599624185810",
-  appId: "1:599624185810:web:e99ce371c3e47591357a0b"
+  appId: "1:599624185810:web:e99ce371c3e47591357a0b",
+  measurementId: "G-7F0ZY586P7"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-/* ---------- 기존 로직 유지 ---------- */
+/* ---------- 기존 코드 ---------- */
 
 function extractVideoId(url) {
     const patterns = [/v=([^&]+)/,/youtu\.be\/([^?]+)/,/embed\/([^?]+)/];
@@ -184,22 +184,12 @@ function extractVideoId(url) {
     return null;
 }
 
-/* 🔁 유튜브 공유 */
-async function changeVideo() {
+function changeVideo() {
     const id = extractVideoId(videoLink.value.trim());
     if (!id) { alert("유효하지 않은 링크에요!"); return; }
-
-    await setDoc(doc(db, "room", "video"), {
-        videoId: id,
-        updatedAt: serverTimestamp()
-    });
+    yt.src = `https://www.youtube.com/embed/${id}?autoplay=1&mute=1`;
+    setDoc(doc(db, "room", "video"), { id });
 }
-
-onSnapshot(doc(db, "room", "video"), (snap) => {
-    if (!snap.exists()) return;
-    const { videoId } = snap.data();
-    yt.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1`;
-});
 
 let selected = null;
 charA.onclick = () => { if (!selected) selected = "A"; };
@@ -217,38 +207,22 @@ chatInput.addEventListener("keydown", e => {
 });
 
 const MAX_LOG = 50;
-
-/* 🔁 채팅 전송 */
 async function sendChat() {
     if (!selected) { alert("캐릭터를 먼저 선택하세요!"); return; }
     const msg = chatInput.value.trim();
     if (!msg) return;
 
+    showBubble(selected, msg);
+
+    const time = new Date().toLocaleTimeString();
+    const name = selected === "A" ? "over" : "Lilreaders";
+
     await addDoc(collection(db, "room", "chat", "messages"), {
-        sender: selected === "A" ? "over" : "Lilreaders",
-        char: selected,
-        text: msg,
-        time: serverTimestamp()
+        name, msg, time, ts: Date.now()
     });
 
     chatInput.value = "";
 }
-
-/* 🔁 채팅 수신 */
-const chatQuery = query(collection(db, "room", "chat", "messages"), orderBy("time"));
-onSnapshot(chatQuery, (snapshot) => {
-    chatLog.innerHTML = "";
-    snapshot.docs.slice(-MAX_LOG).forEach(doc => {
-        const data = doc.data();
-        const line = document.createElement("div");
-        const time = data.time?.toDate().toLocaleTimeString() || "";
-        line.innerHTML = `<b>[${data.sender}]</b> ${data.text}
-            <span style="color:gray;font-size:12px;">${time}</span>`;
-        chatLog.appendChild(line);
-        showBubble(data.char, data.text);
-    });
-    chatLog.scrollTop = chatLog.scrollHeight;
-});
 
 function showBubble(id, msg) {
     const bubble = document.getElementById("bubble" + id);
@@ -311,12 +285,35 @@ function toggleTimer(id) {
     timers[id].running = !timers[id].running;
 }
 
-/* ---------- 이벤트 바인딩 (모듈 대응 핵심 수정) ---------- */
-videoBtn.onclick = changeVideo;
-sendBtn.onclick = sendChat;
-logBtn.onclick = toggleLog;
-timerA.onclick = () => toggleTimer("A");
-timerB.onclick = () => toggleTimer("B");
+/* ---------- 🔥 실시간 동기화 ---------- */
+
+// 채팅 실시간 수신
+onSnapshot(collection(db, "room", "chat", "messages"), snapshot => {
+    chatLog.innerHTML = "";
+    snapshot.docs
+      .sort((a,b)=>a.data().ts - b.data().ts)
+      .slice(-50)
+      .forEach(doc => {
+        const { name, msg, time } = doc.data();
+        const line = document.createElement("div");
+        line.innerHTML =
+          `<b>[${name}]</b> ${msg}
+           <span style="color:gray;font-size:12px;">${time}</span>`;
+        chatLog.appendChild(line);
+      });
+    chatLog.scrollTop = chatLog.scrollHeight;
+});
+
+// 영상 실시간 동기화
+onSnapshot(doc(db, "room", "video"), snap => {
+    if (snap.exists()) {
+        const { id } = snap.data();
+        const current = yt.src.split("/embed/")[1]?.split("?")[0];
+        if (id && id !== current) {
+            yt.src = `https://www.youtube.com/embed/${id}?autoplay=1&mute=1`;
+        }
+    }
+});
 </script>
 
 </body>
